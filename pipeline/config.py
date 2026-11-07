@@ -6,6 +6,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 DIR_RAW = RAIZ / "data" / "raw"
 DB_PADRAO = RAIZ / "data" / "brasileirao.duckdb"
+DIR_SQL = RAIZ / "sql"
 
 
 @dataclass(frozen=True)
