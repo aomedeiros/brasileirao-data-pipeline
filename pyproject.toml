@@ -14,3 +14,18 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.17.4",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+addopts = "--strict-markers"
+markers = [
+    "integracao: executa o pipeline sobre os CSVs reais de data/raw (ignorado se ausentes)",
+]
+
+[tool.coverage.run]
+source = ["pipeline"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
