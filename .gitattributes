@@ -1,0 +1,2 @@
+# Normaliza quebras de linha no repositório (LF), independente do core.autocrlf local.
+* text=auto eol=lf

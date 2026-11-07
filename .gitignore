@@ -1,0 +1,31 @@
+# Dados brutos: não são publicados (inclui CSVs e Legenda.txt).
+# Apenas o marcador .gitkeep é versionado para manter a pasta.
+data/raw/*
+!data/raw/.gitkeep
+
+# Bancos DuckDB gerados pelo pipeline
+*.duckdb
+*.duckdb.wal
+
+# Ambiente Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+
+# Testes, cobertura e lint
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.ruff_cache/
+
+# Temporários, segredos e arquivos de sistema/editor
+*.tmp
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
