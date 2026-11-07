@@ -16,6 +16,7 @@ import duckdb
 
 from pipeline.config import DB_PADRAO, DIR_SQL
 from pipeline.db import conectar, contar, executar_scripts, listar_tabelas
+from pipeline.qualidade import FalhaDeQualidadeError, exigir_camada
 
 TABELAS_REFINED = ("clubes", "partidas", "estatisticas", "gols", "cartoes")
 
@@ -37,10 +38,14 @@ def verificar_refined(con: duckdb.DuckDBPyConnection) -> None:
 def construir_marts(
     con: duckdb.DuckDBPyConnection, dir_sql: Path = DIR_SQL / "marts"
 ) -> dict[str, int]:
-    """Constrói o schema marts e devolve a contagem por tabela."""
+    """Constrói o schema marts e devolve a contagem por tabela.
+
+    As verificações de qualidade rodam antes do COMMIT; se falharem, a
+    MARTS anterior é preservada.
+    """
     verificar_refined(con)
     con.execute("CREATE SCHEMA IF NOT EXISTS marts")
-    executar_scripts(con, dir_sql)
+    executar_scripts(con, dir_sql, verificar=lambda c: exigir_camada(c, "marts"))
     return {t: contar(con, f"marts.{t}") for t in listar_tabelas(con, "marts")}
 
 
@@ -61,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     con = conectar(args.db)
     try:
         contagens = construir_marts(con)
-    except CamadaRefinedAusenteError as erro:
+    except (CamadaRefinedAusenteError, FalhaDeQualidadeError) as erro:
         print(f"ERRO: {erro}", file=sys.stderr)
         return 1
     finally:
@@ -71,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Camada MARTS construída:")
     for tabela, n in contagens.items():
         print(f"  marts.{tabela:<28} {n:>8,}".replace(",", "."))
+    print("Verificações de qualidade da MARTS aprovadas.")
     return 0
 
 

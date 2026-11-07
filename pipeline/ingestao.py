@@ -24,6 +24,7 @@ import duckdb
 
 from pipeline.config import DB_PADRAO, DIR_RAW, FONTES, Fonte
 from pipeline.db import conectar, contar
+from pipeline.qualidade import FalhaDeQualidadeError, exigir_camada
 
 # O DuckDB trata campos vazios como NULL por padrão. Para manter a RAW idêntica
 # ao arquivo, aspas vazias ("") são lidas como texto vazio (allow_quoted_nulls)
@@ -108,8 +109,8 @@ def carregar_tabela(
 def ingerir(con: duckdb.DuckDBPyConnection, dir_raw: Path = DIR_RAW) -> dict[str, int]:
     """Carrega os quatro CSVs no schema raw e devolve a contagem por tabela.
 
-    Tudo ocorre em uma transação: se qualquer arquivo falhar, nenhuma tabela
-    RAW é alterada.
+    Tudo ocorre em uma transação: se qualquer arquivo ou verificação de
+    qualidade falhar, nenhuma tabela RAW é alterada.
     """
     verificar_arquivos(dir_raw)
     verificar_cabecalhos(dir_raw)
@@ -121,6 +122,7 @@ def ingerir(con: duckdb.DuckDBPyConnection, dir_raw: Path = DIR_RAW) -> dict[str
             tabela: carregar_tabela(con, tabela, fonte, dir_raw)
             for tabela, fonte in FONTES.items()
         }
+        exigir_camada(con, "raw")
         con.execute("COMMIT")
     except Exception:
         con.execute("ROLLBACK")
@@ -159,13 +161,14 @@ def main(argv: list[str] | None = None) -> int:
             contagens = ingerir(con, Path(args.raw))
         finally:
             con.close()
-    except (ArquivosAusentesError, IngestaoError) as erro:
+    except (ArquivosAusentesError, IngestaoError, FalhaDeQualidadeError) as erro:
         print(f"ERRO: {erro}", file=sys.stderr)
         return 1
 
     print(f"Banco: {args.db}")
     print("Camada RAW carregada:")
     print(formatar_contagens(contagens))
+    print("Verificações de qualidade da RAW aprovadas.")
     return 0
 
 

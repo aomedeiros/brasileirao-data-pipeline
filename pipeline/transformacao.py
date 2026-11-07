@@ -17,6 +17,7 @@ import duckdb
 
 from pipeline.config import DB_PADRAO, DIR_SQL, FONTES
 from pipeline.db import conectar, contar, executar_scripts, listar_tabelas
+from pipeline.qualidade import FalhaDeQualidadeError, exigir_camada
 
 
 class CamadaRawAusenteError(RuntimeError):
@@ -36,10 +37,14 @@ def verificar_raw(con: duckdb.DuckDBPyConnection) -> None:
 def transformar(
     con: duckdb.DuckDBPyConnection, dir_sql: Path = DIR_SQL / "refined"
 ) -> dict[str, int]:
-    """Constrói o schema refined e devolve a contagem por tabela."""
+    """Constrói o schema refined e devolve a contagem por tabela.
+
+    As verificações de qualidade rodam antes do COMMIT; se falharem, a
+    REFINED anterior é preservada.
+    """
     verificar_raw(con)
     con.execute("CREATE SCHEMA IF NOT EXISTS refined")
-    executar_scripts(con, dir_sql)
+    executar_scripts(con, dir_sql, verificar=lambda c: exigir_camada(c, "refined"))
     return {t: contar(con, f"refined.{t}") for t in listar_tabelas(con, "refined")}
 
 
@@ -60,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     con = conectar(args.db)
     try:
         contagens = transformar(con)
-    except CamadaRawAusenteError as erro:
+    except (CamadaRawAusenteError, FalhaDeQualidadeError) as erro:
         print(f"ERRO: {erro}", file=sys.stderr)
         return 1
     finally:
@@ -70,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Camada REFINED construída:")
     for tabela, n in contagens.items():
         print(f"  refined.{tabela:<14} {n:>8,}".replace(",", "."))
+    print("Verificações de qualidade da REFINED aprovadas.")
     return 0
 
 

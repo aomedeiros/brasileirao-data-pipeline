@@ -5,13 +5,18 @@ pendente na conexão e bloqueia o comando seguinte. Por isso as leituras deste
 projeto usam ``fetchall()``.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import duckdb
 
 
-def conectar(caminho: str | Path = ":memory:") -> duckdb.DuckDBPyConnection:
+def conectar(
+    caminho: str | Path = ":memory:", somente_leitura: bool = False
+) -> duckdb.DuckDBPyConnection:
     """Abre (ou cria) o banco DuckDB, criando a pasta de destino se necessário."""
+    if somente_leitura:
+        return duckdb.connect(str(caminho), read_only=True)
     if str(caminho) != ":memory:":
         Path(caminho).parent.mkdir(parents=True, exist_ok=True)
     return duckdb.connect(str(caminho))
@@ -30,10 +35,16 @@ def listar_tabelas(con: duckdb.DuckDBPyConnection, schema: str) -> list[str]:
     return [nome for (nome,) in linhas]
 
 
-def executar_scripts(con: duckdb.DuckDBPyConnection, pasta: Path) -> list[str]:
+def executar_scripts(
+    con: duckdb.DuckDBPyConnection,
+    pasta: Path,
+    verificar: Callable[[duckdb.DuckDBPyConnection], object] | None = None,
+) -> list[str]:
     """Executa, em ordem alfabética, todos os ``*.sql`` de uma pasta.
 
-    Os scripts rodam em uma única transação: se um falhar, nada é alterado.
+    Os scripts rodam em uma única transação. Se ``verificar`` for informado,
+    ele é chamado antes do COMMIT; qualquer exceção (de um script ou da
+    verificação) desfaz a transação inteira, preservando a versão anterior.
     """
     scripts = sorted(Path(pasta).glob("*.sql"))
     if not scripts:
@@ -42,6 +53,8 @@ def executar_scripts(con: duckdb.DuckDBPyConnection, pasta: Path) -> list[str]:
     try:
         for script in scripts:
             con.execute(script.read_text(encoding="utf-8"))
+        if verificar is not None:
+            verificar(con)
         con.execute("COMMIT")
     except Exception:
         con.execute("ROLLBACK")
